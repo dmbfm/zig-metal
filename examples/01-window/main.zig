@@ -98,7 +98,7 @@ const MyApplicationDelegate = struct {
         self.window = NSWindow.alloc().initWithContentRectStyleMaskBackingDefer(
             frame,
             appkit.NSWindowStyleMaskClosable | appkit.NSWindowStyleMaskTitled,
-            appkit.NSBackingStoreType.BackingStoreBuffered,
+            .BackingStoreBuffered,
             false,
         );
 
