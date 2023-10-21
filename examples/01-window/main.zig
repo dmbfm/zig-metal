@@ -1,10 +1,10 @@
 const std = @import("std");
 const mtl = @import("zig-metal");
-const app_kit = mtl.app_kit;
+const appkit = mtl.extras.appkit;
 
-const NSApplication = app_kit.NSApplication;
-const NSWindow = app_kit.NSWindow;
-const MTKView = app_kit.MTKView;
+const NSApplication = appkit.NSApplication;
+const NSWindow = appkit.NSWindow;
+const MTKView = mtl.extras.metalkit.MTKView;
 
 const Renderer = struct {
     device: *mtl.MTLDevice = undefined,
@@ -97,8 +97,8 @@ const MyApplicationDelegate = struct {
 
         self.window = NSWindow.alloc().initWithContentRectStyleMaskBackingDefer(
             frame,
-            app_kit.NSWindowStyleMaskClosable | app_kit.NSWindowStyleMaskTitled,
-            app_kit.NSBackingStoreType.BackingStoreBuffered,
+            appkit.NSWindowStyleMaskClosable | appkit.NSWindowStyleMaskTitled,
+            appkit.NSBackingStoreType.BackingStoreBuffered,
             false,
         );
 
