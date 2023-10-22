@@ -1,10 +1,10 @@
 const std = @import("std");
 const mtl = @import("zig-metal");
-const app_kit = mtl.app_kit;
+const appkit = mtl.extras.appkit;
 
-const NSApplication = app_kit.NSApplication;
-const NSWindow = app_kit.NSWindow;
-const MTKView = app_kit.MTKView;
+const NSApplication = appkit.NSApplication;
+const NSWindow = appkit.NSWindow;
+const MTKView = mtl.extras.metalkit.MTKView;
 
 const float2 = @Vector(3, f32);
 const float3 = @Vector(3, f32);
@@ -21,8 +21,8 @@ const shader_source: [*:0]const u8 =
     \\
     \\
     \\struct VertexData {
-    \\  device float3* positions [[id(0)]];
-    \\  device float3* colors    [[id(1)]];
+    \\  device float3* positions;
+    \\  device float3* colors;
     \\};
     \\
     \\
@@ -42,6 +42,11 @@ const shader_source: [*:0]const u8 =
     \\ 
     \\ 
 ;
+
+const VertexData = extern struct {
+    positions: *float3,
+    colors: *float3,
+};
 
 const Renderer = struct {
     device: *mtl.MTLDevice = undefined,
@@ -134,23 +139,15 @@ const Renderer = struct {
             @panic("Failed to create vertex positions buffer");
         };
 
-        var vertex_function = self.library.newFunctionWithName(mtl.NSString.stringWithUTF8String("vertex_main")) orelse {
-            @panic("Failed to load vertex function");
-        };
-        defer vertex_function.release();
+        const arg_buffer_len: usize = @sizeOf(VertexData);
 
-        var arg_enc: *mtl.MTLArgumentEncoder = vertex_function.newArgumentEncoderWithBufferIndex(0);
-        defer arg_enc.release();
-
-        self.arg_buffer = self.device.newBufferWithLengthOptions(arg_enc.encodedLength(), .MTLResourceCPUCacheModeDefaultCache) orelse {
+        self.arg_buffer = self.device.newBufferWithLengthOptions(@intCast(arg_buffer_len), .MTLResourceCPUCacheModeDefaultCache) orelse {
             @panic("Failed to create argument buffer");
         };
 
-        arg_enc.setArgumentBufferOffset(self.arg_buffer, 0);
-        arg_enc.setBufferOffsetAtIndex(self.vertex_positions_buffer, 0, 0);
-        arg_enc.setBufferOffsetAtIndex(self.vertex_colors_buffer, 0, 1);
-
-        self.arg_buffer.didModifyRange(.{ .location = 0, .length = self.arg_buffer.length() });
+        var data_ptr: *VertexData = @ptrCast(@alignCast(self.arg_buffer.contents()));
+        data_ptr.positions = @ptrFromInt(@as(usize, @intCast(self.vertex_positions_buffer.gpuAddress())));
+        data_ptr.colors = @ptrFromInt(@as(usize, @intCast(self.vertex_colors_buffer.gpuAddress())));
     }
 
     pub fn draw(self: *Self, view: *MTKView) void {
@@ -166,10 +163,11 @@ const Renderer = struct {
             @panic("Failed to create command encoder!");
         };
 
-        enc.setRenderPipelineState(self.pso);
-        enc.setVertexBufferOffsetAtIndex(self.arg_buffer, 0, 0);
         enc.useResourceUsage(@ptrCast(self.vertex_positions_buffer), .MTLResourceUsageRead);
         enc.useResourceUsage(@ptrCast(self.vertex_colors_buffer), .MTLResourceUsageRead);
+
+        enc.setRenderPipelineState(self.pso);
+        enc.setVertexBufferOffsetAtIndex(self.arg_buffer, 0, 0);
         enc.drawPrimitivesVertexStartVertexCount(.MTLPrimitiveTypeTriangle, 0, 3);
 
         enc.endEncoding();
@@ -233,8 +231,8 @@ const MyApplicationDelegate = struct {
 
         self.window = NSWindow.alloc().initWithContentRectStyleMaskBackingDefer(
             frame,
-            app_kit.NSWindowStyleMaskClosable | app_kit.NSWindowStyleMaskTitled,
-            app_kit.NSBackingStoreType.BackingStoreBuffered,
+            appkit.NSWindowStyleMaskClosable | appkit.NSWindowStyleMaskTitled,
+            appkit.NSBackingStoreType.BackingStoreBuffered,
             false,
         );
 

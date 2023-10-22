@@ -41,4 +41,5 @@ pub fn build(b: *std.Build) void {
     addExample(b, target, optimize, "window", "examples/01-window");
     addExample(b, target, optimize, "primitive", "examples/02-primitive");
     addExample(b, target, optimize, "argbuffers", "examples/03-argbuffers");
+    addExample(b, target, optimize, "animation", "examples/04-animation");
 }

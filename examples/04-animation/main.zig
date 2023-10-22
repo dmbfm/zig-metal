@@ -19,13 +19,28 @@ const shader_source: [*:0]const u8 =
     \\  half3 color;
     \\};
     \\
+    \\
+    \\struct VertexData {
+    \\  device float3* positions;
+    \\  device float3* colors;
+    \\};
+    \\
+    \\
+    \\struct FrameData {
+    \\  float angle;
+    \\};
+    \\
+    \\
     \\v2f vertex vertex_main(
     \\      uint vertex_id [[ vertex_id ]], 
-    \\      device const float3 *positions [[buffer(0)]],
-    \\      device const float3 *colors [[buffer(1)]]) {
+    \\      device const VertexData *data [[buffer(0)]], 
+    \\      constant FrameData *frameData [[buffer(1)]]) {
     \\  v2f o;
-    \\  o.position = float4(positions[vertex_id], 1.0);
-    \\  o.color = half3(colors[vertex_id]);
+    \\
+    \\  float a = frameData->angle;
+    \\  float3x3 rot_mat = float3x3(sin(a), cos(a), 0.0, cos(a), -sin(a), 0.0, 0.0, 0.0, 1.0);
+    \\  o.position = float4(rot_mat * data->positions[vertex_id], 1.0);
+    \\  o.color = half3(data->colors[vertex_id]);
     \\  return o;
     \\} 
     \\ 
@@ -36,12 +51,31 @@ const shader_source: [*:0]const u8 =
     \\ 
 ;
 
+const FrameData = extern struct {
+    angle: f32,
+};
+
+const VertexData = extern struct {
+    positions: *float3,
+    colors: *float3,
+};
+
+const BlockType = mtl.extras.block.BlockLiteralUserData1(void, *mtl.MTLCommandBuffer, Renderer);
+
 const Renderer = struct {
     device: *mtl.MTLDevice = undefined,
     command_queue: *mtl.MTLCommandQueue = undefined,
     pso: *mtl.MTLRenderPipelineState = undefined,
+    library: *mtl.MTLLibrary = undefined,
     vertex_positions_buffer: *mtl.MTLBuffer = undefined,
     vertex_colors_buffer: *mtl.MTLBuffer = undefined,
+    arg_buffer: *mtl.MTLBuffer = undefined,
+    frame_data: [max_in_flight_frames]*mtl.MTLBuffer = undefined,
+    angle: f32 = 0,
+    frame: usize = 0,
+    sema: std.Thread.Semaphore = undefined,
+
+    const max_in_flight_frames = 6;
 
     const Self = @This();
 
@@ -52,13 +86,22 @@ const Renderer = struct {
         };
         self.initPipeline();
         self.initBuffers();
+        self.initFrameData();
+
+        self.sema = std.Thread.Semaphore{ .permits = max_in_flight_frames };
     }
 
     pub fn deinit(self: *Self) void {
+        self.library.release();
+        self.arg_buffer.release();
+        self.vertex_colors_buffer.release();
+        self.vertex_positions_buffer.release();
+        for (&self.frame_data) |buf| {
+            buf.release();
+        }
+        self.pso.release();
         self.command_queue.release();
         self.device.release();
-        self.vertex_positions_buffer.release();
-        self.vertex_colors_buffer.release();
     }
 
     fn initPipeline(self: *Self) void {
@@ -66,7 +109,6 @@ const Renderer = struct {
         var library = self.device.newLibraryWithSourceOptionsError(source_string, null, null) orelse {
             @panic("Failed to create library!");
         };
-        defer library.release();
 
         var vertex_function = library.newFunctionWithName(mtl.NSString.stringWithUTF8String("vertex_main")) orelse {
             @panic("Failed to create vertex function");
@@ -88,10 +130,13 @@ const Renderer = struct {
         self.pso = self.device.newRenderPipelineStateWithDescriptorError(rpdesc, null) orelse {
             @panic("Failed to create render pipeline state!");
         };
+
+        self.library = library;
     }
 
     fn initBuffers(self: *Self) void {
         const num_vertices: usize = 3;
+
         var positions = [num_vertices]float3{
             .{ -0.8, 0.8, 0 },
             .{ 0, -0.8, 0 },
@@ -121,12 +166,46 @@ const Renderer = struct {
         ) orelse {
             @panic("Failed to create vertex positions buffer");
         };
+
+        const arg_buffer_len: usize = @sizeOf(VertexData);
+
+        self.arg_buffer = self.device.newBufferWithLengthOptions(@intCast(arg_buffer_len), .MTLResourceCPUCacheModeDefaultCache) orelse {
+            @panic("Failed to create argument buffer");
+        };
+
+        var data_ptr: *VertexData = @ptrCast(@alignCast(self.arg_buffer.contents()));
+        data_ptr.positions = @ptrFromInt(@as(usize, @intCast(self.vertex_positions_buffer.gpuAddress())));
+        data_ptr.colors = @ptrFromInt(@as(usize, @intCast(self.vertex_colors_buffer.gpuAddress())));
+    }
+
+    pub fn initFrameData(self: *Self) void {
+        for (0..max_in_flight_frames) |i| {
+            self.frame_data[i] = self.device.newBufferWithLengthOptions(@sizeOf(FrameData), .MTLResourceCPUCacheModeDefaultCache) orelse {
+                @panic("Failed to create frame data!");
+            };
+        }
+    }
+
+    pub fn commandBufferCompletionHandler(self: *Self, _: *mtl.MTLCommandBuffer) void {
+        self.sema.post();
     }
 
     pub fn draw(self: *Self, view: *MTKView) void {
+        self.frame = (self.frame + 1) % @as(usize, @intCast(max_in_flight_frames));
+        var frame_data_buffer = self.frame_data[self.frame];
+
         var cmd = self.command_queue.commandBuffer() orelse {
             @panic("Failed to create command buffer!");
         };
+
+        self.sema.wait();
+
+        var block = BlockType.init(&commandBufferCompletionHandler, self);
+        cmd.addCompletedHandler(@ptrCast(&block));
+
+        var frame_data: *FrameData = @ptrCast(@alignCast(frame_data_buffer.contents()));
+        frame_data.angle += 0.0025;
+        // frame_data_buffer.didModifyRange(.{ .location = 0, .length = @intCast(@sizeOf(FrameData)) });
 
         var rpd = view.currentRenderPassDescriptor() orelse {
             @panic("Failed to get current render pass descriptor!");
@@ -136,9 +215,12 @@ const Renderer = struct {
             @panic("Failed to create command encoder!");
         };
 
+        enc.useResourceUsage(@ptrCast(self.vertex_positions_buffer), .MTLResourceUsageRead);
+        enc.useResourceUsage(@ptrCast(self.vertex_colors_buffer), .MTLResourceUsageRead);
+
         enc.setRenderPipelineState(self.pso);
-        enc.setVertexBufferOffsetAtIndex(self.vertex_positions_buffer, 0, 0);
-        enc.setVertexBufferOffsetAtIndex(self.vertex_colors_buffer, 0, 1);
+        enc.setVertexBufferOffsetAtIndex(self.arg_buffer, 0, 0);
+        enc.setVertexBufferOffsetAtIndex(frame_data_buffer, 0, 1);
         enc.drawPrimitivesVertexStartVertexCount(.MTLPrimitiveTypeTriangle, 0, 3);
 
         enc.endEncoding();
@@ -213,13 +295,13 @@ const MyApplicationDelegate = struct {
 
         self.view = MTKView.alloc().initWithFrameDevice(frame, self.device);
         self.view.setColorPixelFormat(mtl.MTLPixelFormat.MTLPixelFormatBGRA8Unorm_sRGB);
-        self.view.setClearColor(mtl.MTLClearColorMake(0, 0, 0, 1));
+        self.view.setClearColor(mtl.MTLClearColorMake(1, 1, 1, 1));
 
         self.view_delegate = MetalViewDelegate.init(self.device);
         self.view.setDelegate(&self.view_delegate);
 
         self.window.setContentView(@ptrCast(self.view));
-        self.window.setTitle(mtl.NSString.stringWithUTF8String("Zig Metal Sample 02: Primitives"));
+        self.window.setTitle(mtl.NSString.stringWithUTF8String("Zig Metal Sample 03: Argument Buffers"));
 
         self.window.makeKeyAndOrderFront(null);
 

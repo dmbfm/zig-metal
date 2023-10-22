@@ -19,104 +19,39 @@ const std = @import("std");
 //
 
 extern const _NSConcreteStackBlock: opaque {};
+extern const _NSConcreteGlobalBlock: opaque {};
 
 pub fn BlockDescriptor(comptime BlockLiteral: type) type {
     return extern struct {
-        reserved: c_long = 0,
-        size: c_long = @intCast(@sizeOf(BlockLiteral)),
-        copy_helper: [*c]u8 = null,
-        dispose_helper: [*c]u8 = null,
-        signature: [*c]u8 = null,
+        reserved: c_ulong = 0,
+        size: c_ulong = @intCast(@sizeOf(BlockLiteral)),
     };
 }
 
-pub fn BlockLiteral1(comptime ReturnType: type, comptime T0: type) type {
+pub fn BlockLiteralUserData1(comptime ReturnType: type, comptime T0: type, comptime UserData: type) type {
     return extern struct {
-        isa: *opaque {} = &_NSConcreteStackBlock,
+        isa: *anyopaque = @ptrCast(&_NSConcreteStackBlock),
         flags: c_int = 0,
-        reservec: c_int = 0,
+        reserved: c_int = 0,
         invoke: *const fn (*Self, T0) callconv(.C) ReturnType = undefined,
-        desc: *BlockDescriptor = &bd,
-
-        const Self = @This();
-        const BD = BlockDescriptor(Self);
-        const bd = &BD{};
-    };
-}
-
-pub fn BlockLiteral2(comptime ReturnType: type, comptime T0: type, comptime T1: type) type {
-    return extern struct {
-        isa: [*c]u8 = @ptrCast(&_NSConcreteStackBlock),
-        flags: c_int = 0,
-        reservec: c_int = 0,
-        invoke: *const fn (*Self, T0, T1) callconv(.C) ReturnType = undefined,
-        desc: [*c]u8 = @constCast(@ptrCast(&bd)),
-        external_fn: *const fn (T0, T1) ReturnType,
-
-        const Self = @This();
-        const BD = BlockDescriptor(Self);
-        const bd = &BD{};
-
-        fn invoke(self: *Self, t0: T0, t1: T1) callconv(.C) ReturnType {
-            return self.external_fn(t0, t1);
-        }
-
-        pub fn init(func: *const fn (T0, T1) ReturnType) Self {
-            return .{
-                .invoke = &invoke,
-                .external_fn = func,
-            };
-        }
-    };
-}
-
-pub fn BlockLiteralUserData2(comptime ReturnType: type, comptime T0: type, comptime T1: type, comptime UserData: type) type {
-    return extern struct {
-        isa: [*c]u8 = @ptrCast(&_NSConcreteStackBlock),
-        flags: c_int = 0,
-        reservec: c_int = 0,
-        invoke: *const fn (*Self, T0, T1) callconv(.C) ReturnType = undefined,
-        desc: [*c]u8 = @constCast(@ptrCast(&bd)),
-        external_fn: *const fn (*UserData, T0, T1) ReturnType,
+        desc: *const BlockDescriptor(Self) = bd,
+        external_fn: *const anyopaque = undefined,
         user_data: *UserData,
 
         const Self = @This();
-        const BD = BlockDescriptor(Self);
-        const bd = &BD{};
+        const bd = &BlockDescriptor(Self){};
 
-        fn invoke(self: *Self, t0: T0, t1: T1) callconv(.C) ReturnType {
-            return self.external_fn(self.user_data, t0, t1);
+        fn invoke(self: *Self, t0: T0) callconv(.C) ReturnType {
+            var func: *const fn (*UserData, T0) ReturnType = @ptrCast(@alignCast(self.external_fn));
+            return func(self.user_data, t0);
         }
 
-        pub fn init(func: *const fn (*UserData, T0, T1) ReturnType, user_data: *UserData) Self {
+        pub fn init(func: *const fn (*UserData, T0) ReturnType, user_data: *UserData) Self {
             return .{
                 .invoke = &invoke,
-                .external_fn = func,
+                .external_fn = @ptrCast(func),
                 .user_data = user_data,
             };
         }
-    };
-}
-
-pub fn create_block_literal_2(
-    comptime ReturnType: type,
-    comptime T0: type,
-    comptime T1: type,
-    func: *const fn (T0, T1) ReturnType,
-) BlockLiteralUserData2(ReturnType, T0, T1, void) {
-    return BlockLiteralUserData2(ReturnType, T0, T1, void).init(func, null);
-}
-
-pub fn BlockLiteral3(comptime ReturnType: type, comptime T0: type, comptime T1: type, comptime T2: type) type {
-    return extern struct {
-        isa: *opaque {} = &_NSConcreteStackBlock,
-        flags: c_int = 0,
-        reservec: c_int = 0,
-        invoke: *const fn (*Self, T0, T1, T2) callconv(.C) ReturnType = undefined,
-        desc: *BlockDescriptor = &bd,
-
-        const Self = @This();
-        const BD = BlockDescriptor(Self);
-        const bd = &BD{};
     };
 }
