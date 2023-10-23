@@ -2,11 +2,11 @@
 
 This library is currently in alpha stage, don't use it in any serious projects!
 
-Bindings are automatically generated using zig and libclang, but there still
+Bindings are automatically generated using zig and libclang, but there are still
 some issues with the code generation. The source code for the generator can be
 found here: https://github.com/dmbfm/zig-metal-gen.
 
-In the examples folder you can find a few samples which are mostly directly
+In the examples folder you can find a few samples which were directly
 translated from apple's metal-cpp samples.
 
 # Usage
