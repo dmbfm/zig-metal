@@ -217,6 +217,37 @@ const shader_source: [*:0]const u8 =
     \\ 
 ;
 
+const kernel_source =
+    \\#include <metal_stdlib>
+    \\using namespace metal;
+    \\
+    \\kernel void mandelbrot_set(
+    \\      texture2d<half, access::write> tex [[texture(0)]],
+    \\      uint2 index [[thread_position_in_grid]],
+    \\      uint2 grid_size [[threads_per_grid]]) {
+    \\
+    \\  float x0 = 2.0 * index.x / grid_size.x - 1.5;
+    \\  float y0 = 2.0 * index.y / grid_size.y - 1.0;
+    \\  float x = 0.0;
+    \\  float y = 0.0;
+    \\  uint iteration = 0;
+    \\  uint max_iteration = 1000;
+    \\  float xtmp = 0.0;
+    \\  while(x * x + y * y <= 4 && iteration < max_iteration)
+    \\  {
+    \\      xtmp = x * x - y * y + x0;
+    \\      y = 2 * x * y + y0;
+    \\      x = xtmp;
+    \\      iteration += 1;
+    \\  }
+    \\
+    \\  half color = (0.5 + 0.5 * cos(3.0 + iteration * 0.15));
+    \\  tex.write(half4(color, color, color, 1.0), index, 0);
+    \\
+    \\}
+    \\
+;
+
 const VertexData = extern struct {
     position: float3,
     normal: float3,
@@ -241,6 +272,7 @@ const Renderer = struct {
     device: *mtl.MTLDevice = undefined,
     command_queue: *mtl.MTLCommandQueue = undefined,
     pso: *mtl.MTLRenderPipelineState = undefined,
+    compute_pso: *mtl.MTLComputePipelineState = undefined,
     depth_stencil_state: *mtl.MTLDepthStencilState = undefined,
     library: *mtl.MTLLibrary = undefined,
     texture: *mtl.MTLTexture = undefined,
@@ -257,6 +289,8 @@ const Renderer = struct {
     const instance_depth = 10;
     const num_instances = instance_rows * instance_columns * instance_depth;
     const max_in_flight_frames = 3;
+    const texture_width = 128;
+    const texture_height = 128;
 
     const Self = @This();
 
@@ -266,9 +300,11 @@ const Renderer = struct {
             @panic("Failed to create command queue!");
         };
         self.initPipeline();
+        self.initComputePipeline();
         self.initDepthStencilStates();
         self.initTextures();
         self.initBuffers();
+        self.generateMandelbrotTexture();
 
         self.sema = std.Thread.Semaphore{ .permits = max_in_flight_frames };
     }
@@ -283,6 +319,7 @@ const Renderer = struct {
             self.camera_data_buffer[i].release();
         }
         self.pso.release();
+        self.compute_pso.release();
         self.depth_stencil_state.release();
         self.command_queue.release();
         self.device.release();
@@ -319,6 +356,23 @@ const Renderer = struct {
         self.library = library;
     }
 
+    fn initComputePipeline(self: *Self) void {
+        var source_string = mtl.NSString.stringWithUTF8String(kernel_source);
+        var library = self.device.newLibraryWithSourceOptionsError(source_string, null, null) orelse {
+            @panic("Failed to create compute library!");
+        };
+        defer library.release();
+
+        var func = library.newFunctionWithName(mtl.NSString.stringWithUTF8String("mandelbrot_set")) orelse {
+            @panic("Failed to load compute function");
+        };
+        defer func.release();
+
+        self.compute_pso = self.device.newComputePipelineStateWithFunctionError(func, null) orelse {
+            @panic("Failed to create compute PSO!");
+        };
+    }
+
     fn initDepthStencilStates(self: *Self) void {
         var desc: *mtl.MTLDepthStencilDescriptor = mtl.MTLDepthStencilDescriptor.alloc().init();
         desc.setDepthCompareFunction(.MTLCompareFunctionLess);
@@ -332,48 +386,19 @@ const Renderer = struct {
     }
 
     fn initTextures(self: *Self) void {
-        const tw: usize = 128;
-        const th: usize = 128;
-
         var desc: *mtl.MTLTextureDescriptor = mtl.MTLTextureDescriptor.alloc().init();
         defer desc.release();
 
-        desc.setWidth(tw);
-        desc.setHeight(th);
+        desc.setWidth(texture_width);
+        desc.setHeight(texture_height);
         desc.setPixelFormat(.MTLPixelFormatRGBA8Unorm);
         desc.setTextureType(.MTLTextureType2D);
         desc.setStorageMode(.MTLStorageModeManaged);
-        desc.setUsage(mtl.MTLTextureUsageShaderRead);
+        desc.setUsage(mtl.MTLTextureUsageShaderRead | mtl.MTLTextureUsageShaderWrite);
 
         self.texture = self.device.newTextureWithDescriptor(desc) orelse {
             @panic("Failed to create texture!");
         };
-
-        var textuer_data: [128 * 128 * 4]u8 = undefined;
-        for (0..th) |y| {
-            for (0..tw) |x| {
-                const is_white: bool = ((x ^ y) & 0b1000000) != 0;
-                const c: u8 = if (is_white) 0xff else 0xa;
-                const i: usize = y * tw + x;
-
-                textuer_data[i * 4 + 0] = c;
-                textuer_data[i * 4 + 1] = c;
-                textuer_data[i * 4 + 2] = c;
-                textuer_data[i * 4 + 3] = 0xff;
-            }
-        }
-
-        var region = mtl.MTLRegion{
-            .origin = .{ .x = 0, .y = 0, .z = 0 },
-            .size = .{ .width = @intCast(tw), .height = @intCast(th), .depth = 1 },
-        };
-
-        self.texture.replaceRegionMipmapLevelWithBytesBytesPerRow(
-            region,
-            0,
-            @ptrCast(textuer_data[0..].ptr),
-            @intCast(4 * tw),
-        );
     }
 
     fn initBuffers(self: *Self) void {
@@ -414,6 +439,36 @@ const Renderer = struct {
         }
     }
 
+    pub fn generateMandelbrotTexture(self: *Self) void {
+        var command_buffer = self.command_queue.commandBuffer() orelse {
+            @panic("Failed to create command buffer");
+        };
+
+        var enc = command_buffer.computeCommandEncoder() orelse {
+            @panic("Failed to create compute command encoder!");
+        };
+
+        enc.setComputePipelineState(self.compute_pso);
+        enc.setTextureAtIndex(self.texture, 0);
+
+        const grid_size: mtl.MTLSize = .{
+            .width = texture_width,
+            .height = texture_height,
+            .depth = 1,
+        };
+
+        const num_threads_per_threadgroup = self.compute_pso.maxTotalThreadsPerThreadgroup();
+        const threadgroup_size: mtl.MTLSize = .{
+            .width = num_threads_per_threadgroup,
+            .height = 1,
+            .depth = 1,
+        };
+
+        enc.dispatchThreadsThreadsPerThreadgroup(grid_size, threadgroup_size);
+        enc.endEncoding();
+        command_buffer.commit();
+    }
+
     pub fn commandBufferCompletionHandler(self: *Self, _: *mtl.MTLCommandBuffer) void {
         self.sema.post();
     }
@@ -435,7 +490,7 @@ const Renderer = struct {
 
         const scl: f32 = 0.1;
         var instance_data: [*c]InstanceData = @ptrCast(@alignCast(instance_data_buffer.contents()));
-        const object_position = float3{ 0, 0, -5 };
+        const object_position = float3{ 0, 0, -3.6 };
 
         const rt = Math.make_translate(object_position);
         const rr1 = Math.make_y_rotate(-self.angle);

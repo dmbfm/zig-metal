@@ -32591,15 +32591,14 @@ pub const NSMatchingOptions = enum(c_ulong) {
   NSMatchingWithoutAnchoringBounds = 16,
 };
 
-pub const MTLTextureUsage = enum(c_ulong) {
-  MTLTextureUsageUnknown = 0,
-  MTLTextureUsageShaderRead = 1,
-  MTLTextureUsageShaderWrite = 2,
-  MTLTextureUsageRenderTarget = 4,
-  MTLTextureUsagePixelFormatView = 16,
-  MTLTextureUsageShaderAtomic = 32,
-};
+pub const MTLTextureUsage = c_ulong;
 
+pub const MTLTextureUsageUnknown: c_ulong =  0 ;
+pub const MTLTextureUsageShaderRead: c_ulong =  1 ;
+pub const MTLTextureUsageShaderWrite: c_ulong =  2 ;
+pub const MTLTextureUsageRenderTarget: c_ulong =  4 ;
+pub const MTLTextureUsagePixelFormatView: c_ulong =  16 ;
+pub const MTLTextureUsageShaderAtomic: c_ulong =  32 ;
 pub const NSDecodingFailurePolicy = enum(c_long) {
   NSDecodingFailurePolicyRaiseException = 0,
   NSDecodingFailurePolicySetErrorAndReturn = 1,
