@@ -47,4 +47,5 @@ pub fn build(b: *std.Build) void {
     addExample(b, target, optimize, "lighting", "examples/07-lighting");
     addExample(b, target, optimize, "texturing", "examples/08-texturing");
     addExample(b, target, optimize, "compute", "examples/09-compute");
+    addExample(b, target, optimize, "compute-to-render", "examples/10-compute_to_render");
 }
