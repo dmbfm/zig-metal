@@ -9,5 +9,6 @@ zig-out/
 build/
 build-*/
 docgen_tmp/
+.DS_Store
 
 # End of https://www.toptal.com/developers/gitignore/api/zig

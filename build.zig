@@ -1,6 +1,20 @@
 const std = @import("std");
 
-var module: *std.build.Module = undefined;
+pub const Package = struct {
+    module: *std.Build.Module,
+
+    pub fn link(pkg: Package, exe: *std.Build.CompileStep) void {
+        exe.addModule("zig-metal", pkg.module);
+    }
+};
+
+pub fn package(b: *std.Build) Package {
+    return .{
+        .module = b.createModule(
+            .{ .source_file = .{ .path = thisDir() ++ "/src/main.zig" } },
+        ),
+    };
+}
 
 pub fn addExample(
     b: *std.Build,
@@ -18,7 +32,9 @@ pub fn addExample(
 
     b.installArtifact(exe);
 
-    exe.addModule("zig-metal", module);
+    var pkg = package(b);
+
+    pkg.link(exe);
     exe.linkFramework("Foundation");
     exe.linkFramework("AppKit");
     exe.linkFramework("Metal");
@@ -31,10 +47,6 @@ pub fn addExample(
 }
 
 pub fn build(b: *std.Build) void {
-    module = b.createModule(
-        .{ .source_file = .{ .path = "src/main.zig" } },
-    );
-
     var target = b.standardTargetOptions(.{});
     var optimize = b.standardOptimizeOption(.{});
 
@@ -48,4 +60,8 @@ pub fn build(b: *std.Build) void {
     addExample(b, target, optimize, "texturing", "examples/08-texturing");
     addExample(b, target, optimize, "compute", "examples/09-compute");
     addExample(b, target, optimize, "compute-to-render", "examples/10-compute_to_render");
+}
+
+inline fn thisDir() []const u8 {
+    return comptime std.fs.path.dirname(@src().file) orelse ".";
 }
