@@ -681,7 +681,7 @@ const MyApplicationDelegate = struct {
         self.view.setDelegate(&self.view_delegate);
 
         self.window.setContentView(@ptrCast(self.view));
-        self.window.setTitle(mtl.NSString.stringWithUTF8String("Zig Metal Sample 03: Argument Buffers"));
+        self.window.setTitle(mtl.NSString.stringWithUTF8String("Zig Metal Sample 10: Compute to Render"));
 
         self.window.makeKeyAndOrderFront(null);
 
