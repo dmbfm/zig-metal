@@ -121,7 +121,7 @@ const Renderer = struct {
     }
 
     fn initPipeline(self: *Self) void {
-        var source_string = mtl.NSString.stringWithUTF8String(shader_source);
+        const source_string = mtl.NSString.stringWithUTF8String(shader_source);
         var library = self.device.newLibraryWithSourceOptionsError(source_string, null, null) orelse {
             @panic("Failed to create library!");
         };
@@ -223,7 +223,7 @@ const Renderer = struct {
         frame_data.angle += 0.0025;
         // frame_data_buffer.didModifyRange(.{ .location = 0, .length = @intCast(@sizeOf(FrameData)) });
 
-        var rpd = view.currentRenderPassDescriptor() orelse {
+        const rpd = view.currentRenderPassDescriptor() orelse {
             @panic("Failed to get current render pass descriptor!");
         };
 
@@ -241,7 +241,7 @@ const Renderer = struct {
 
         enc.endEncoding();
 
-        var drawable = view.currentDrawable() orelse {
+        const drawable = view.currentDrawable() orelse {
             @panic("Failed to get drawable!");
         };
 
@@ -293,7 +293,7 @@ const MyApplicationDelegate = struct {
     pub fn applicationDidFinishLaunching(self: *Self, notification: *mtl.NSNotification) void {
         std.log.info("did finish launching!", .{});
 
-        var frame = mtl.CGRect{
+        const frame = mtl.CGRect{
             .origin = .{ .x = 100, .y = 100 },
             .size = .{ .width = 512, .height = 512 },
         };

@@ -1,5 +1,6 @@
 const std = @import("std");
 const gen = @import("gen.zig");
+const trait = @import("zigtrait");
 
 const objc_msgSend = gen.objc_msgSend;
 const id = gen.id;
@@ -71,11 +72,11 @@ pub const NSApplication = opaque {
             },
         };
 
-        var value = gen.NSValue.valueWithPointer(@ptrCast(del));
-        var nsvalue_class = gen.objc_lookUpClass("NSValue");
-        var sel = gen.sel_registerName("applicationDidFinishLaunching:");
-        var sel2 = gen.sel_registerName("applicationWillFinishLaunching:");
-        var sel3 = gen.sel_registerName("applicationShouldTerminateAfterLastWindowClosed:");
+        const value = gen.NSValue.valueWithPointer(@ptrCast(del));
+        const nsvalue_class = gen.objc_lookUpClass("NSValue");
+        const sel = gen.sel_registerName("applicationDidFinishLaunching:");
+        const sel2 = gen.sel_registerName("applicationWillFinishLaunching:");
+        const sel3 = gen.sel_registerName("applicationShouldTerminateAfterLastWindowClosed:");
 
         const Wrapper = ApplicationDelegateWrapper(DelegateType);
 
@@ -83,7 +84,7 @@ pub const NSApplication = opaque {
         comptime var hasApplicationWillFinishLaunching = false;
         comptime var hasApplicationShouldTerminateAfterLastWindowClosed = false;
         comptime {
-            if (std.meta.trait.hasFn("applicationDidFinishLaunching")(DelegateType)) {
+            if (trait.hasFn("applicationDidFinishLaunching")(DelegateType)) {
                 hasApplicationDidFinishLaunching = true;
             }
         }
@@ -93,7 +94,7 @@ pub const NSApplication = opaque {
         }
 
         comptime {
-            if (std.meta.trait.hasFn("applicationWillFinishLaunching")(DelegateType)) {
+            if (trait.hasFn("applicationWillFinishLaunching")(DelegateType)) {
                 hasApplicationWillFinishLaunching = true;
             }
         }
@@ -103,7 +104,7 @@ pub const NSApplication = opaque {
         }
 
         comptime {
-            if (std.meta.trait.hasFn("applicationShouldTerminateAfterLastWindowClosed")(DelegateType)) {
+            if (trait.hasFn("applicationShouldTerminateAfterLastWindowClosed")(DelegateType)) {
                 hasApplicationShouldTerminateAfterLastWindowClosed = true;
             }
         }

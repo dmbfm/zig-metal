@@ -42,7 +42,7 @@ pub fn BlockLiteralUserData1(comptime ReturnType: type, comptime T0: type, compt
         const bd = &BlockDescriptor(Self){};
 
         fn invoke(self: *Self, t0: T0) callconv(.C) ReturnType {
-            var func: *const fn (*UserData, T0) ReturnType = @ptrCast(@alignCast(self.external_fn));
+            const func: *const fn (*UserData, T0) ReturnType = @ptrCast(@alignCast(self.external_fn));
             return func(self.user_data, t0);
         }
 

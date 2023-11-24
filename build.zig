@@ -11,9 +11,21 @@ pub const Package = struct {
 pub fn package(b: *std.Build) Package {
     return .{
         .module = b.createModule(
-            .{ .source_file = .{ .path = thisDir() ++ "/src/main.zig" } },
+            .{
+                .source_file = .{ .path = thisDir() ++ "/src/main.zig" },
+                .dependencies = &[_]std.build.ModuleDependency{
+                    .{
+                        .name = "zigtrait",
+                        .module = zigTraitModule(b),
+                    },
+                },
+            },
         ),
     };
+}
+
+pub fn zigTraitModule(b: *std.Build) *std.Build.Module {
+    return b.createModule(.{ .source_file = .{ .path = thisDir() ++ "/libs/zigtrait/src/zigtrait.zig" } });
 }
 
 pub fn addExample(
@@ -35,6 +47,7 @@ pub fn addExample(
     var pkg = package(b);
 
     pkg.link(exe);
+    // exe.addModule("zigtrait", zigTraitModule(b));
     exe.linkFramework("Foundation");
     exe.linkFramework("AppKit");
     exe.linkFramework("Metal");
@@ -47,8 +60,8 @@ pub fn addExample(
 }
 
 pub fn build(b: *std.Build) void {
-    var target = b.standardTargetOptions(.{});
-    var optimize = b.standardOptimizeOption(.{});
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
     addExample(b, target, optimize, "window", "examples/01-window");
     addExample(b, target, optimize, "primitive", "examples/02-primitive");

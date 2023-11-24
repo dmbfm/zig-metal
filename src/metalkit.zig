@@ -1,5 +1,6 @@
 const std = @import("std");
 const gen = @import("gen.zig");
+const trait = @import("zigtrait");
 
 const objc_msgSend = gen.objc_msgSend;
 const id = gen.id;
@@ -70,17 +71,17 @@ pub fn MTKViewInterfaceMixin(comptime Self: type, comptime class_name: [*:0]cons
                 },
             };
 
-            var value = gen.NSValue.valueWithPointer(@ptrCast(del));
-            var nsvalue_class = gen.objc_lookUpClass("NSValue");
-            var sel_drawInMTKView = gen.sel_registerName("drawInMTKView:");
-            var sel_drawableSizeWillChange = gen.sel_registerName("mtkView:drawableSizeWillChange:");
+            const value = gen.NSValue.valueWithPointer(@ptrCast(del));
+            const nsvalue_class = gen.objc_lookUpClass("NSValue");
+            const sel_drawInMTKView = gen.sel_registerName("drawInMTKView:");
+            const sel_drawableSizeWillChange = gen.sel_registerName("mtkView:drawableSizeWillChange:");
 
             const Wrapper = MTKViewDelegateWrapper(DelegateType, Self);
 
             comptime var hasDrawInMTKView = false;
             comptime var hasDrawableSizeWillChange = false;
             comptime {
-                if (std.meta.trait.hasFn("drawInMTKView")(DelegateType)) {
+                if (trait.hasFn("drawInMTKView")(DelegateType)) {
                     hasDrawInMTKView = true;
                 }
             }
@@ -90,7 +91,7 @@ pub fn MTKViewInterfaceMixin(comptime Self: type, comptime class_name: [*:0]cons
             }
 
             comptime {
-                if (std.meta.trait.hasFn("drawableSizeWillChange")(DelegateType)) {
+                if (trait.hasFn("drawableSizeWillChange")(DelegateType)) {
                     hasDrawableSizeWillChange = true;
                 }
             }
