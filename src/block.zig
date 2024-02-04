@@ -30,7 +30,7 @@ pub fn BlockDescriptor(comptime BlockLiteral: type) type {
 
 pub fn BlockLiteralUserData1(comptime ReturnType: type, comptime T0: type, comptime UserData: type) type {
     return extern struct {
-        isa: *anyopaque = @ptrCast(&_NSConcreteStackBlock),
+        isa: *anyopaque = @constCast(&_NSConcreteStackBlock),
         flags: c_int = 0,
         reserved: c_int = 0,
         invoke: *const fn (*Self, T0) callconv(.C) ReturnType = undefined,

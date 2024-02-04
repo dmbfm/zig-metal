@@ -3,8 +3,8 @@ const std = @import("std");
 pub const Package = struct {
     module: *std.Build.Module,
 
-    pub fn link(pkg: Package, exe: *std.Build.CompileStep) void {
-        exe.addModule("zig-metal", pkg.module);
+    pub fn link(pkg: Package, exe: *std.Build.Step.Compile) void {
+        exe.root_module.addImport("zig-metal", pkg.module);
     }
 };
 
@@ -12,12 +12,9 @@ pub fn package(b: *std.Build) Package {
     return .{
         .module = b.createModule(
             .{
-                .source_file = .{ .path = thisDir() ++ "/src/main.zig" },
-                .dependencies = &[_]std.build.ModuleDependency{
-                    .{
-                        .name = "zigtrait",
-                        .module = zigTraitModule(b),
-                    },
+                .root_source_file = .{ .path = thisDir() ++ "/src/main.zig" },
+                .imports = &.{
+                    .{ .name = "zigtrait", .module = zigTraitModule(b) },
                 },
             },
         ),
@@ -25,12 +22,12 @@ pub fn package(b: *std.Build) Package {
 }
 
 pub fn zigTraitModule(b: *std.Build) *std.Build.Module {
-    return b.createModule(.{ .source_file = .{ .path = thisDir() ++ "/libs/zigtrait/src/zigtrait.zig" } });
+    return b.createModule(.{ .root_source_file = .{ .path = thisDir() ++ "/libs/zigtrait/src/zigtrait.zig" } });
 }
 
 pub fn addExample(
     b: *std.Build,
-    target: std.zig.CrossTarget,
+    target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     comptime name: []const u8,
     comptime path: []const u8,
